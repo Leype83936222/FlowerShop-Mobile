@@ -13,9 +13,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { AppContext } from './index';
+import { AppContext } from '../AppContext';
 
-// TypeScript interfaces (matching index.tsx)
+// TypeScript interfaces
 interface Product {
   id: number;
   name: string;
@@ -29,7 +29,7 @@ interface Product {
   category: string;
 }
 
-// Product Detail Modal Component (same as products.tsx)
+// Product Detail Modal Component
 const ProductDetailModal: React.FC<{
   product: Product | null;
   visible: boolean;
@@ -40,15 +40,19 @@ const ProductDetailModal: React.FC<{
 
   if (!product) return null;
 
-  const handleAddToCart = () => {
-    for (let i = 0; i < quantity; i++) {
-      addToCart(product);
+  const handleAddToCart = async () => {
+    try {
+      for (let i = 0; i < quantity; i++) {
+        await addToCart(product);
+      }
+      Alert.alert(
+        "Added to Cart!",
+        `${quantity}x ${product.name} added to your cart.`,
+        [{ text: "OK", onPress: onClose }]
+      );
+    } catch (error) {
+      console.error('Error adding to cart:', error);
     }
-    Alert.alert(
-      "Added to Cart!",
-      `${quantity}x ${product.name} added to your cart.`,
-      [{ text: "OK", onPress: onClose }]
-    );
   };
 
   const renderStars = (rating: number) => {
@@ -136,20 +140,24 @@ const FavoriteProductCard: React.FC<{
 }> = ({ product, onPress }) => {
   const { addToCart, removeFromFavorites } = useContext(AppContext);
 
-  const handleAddToCart = (e: any) => {
+  const handleAddToCart = async (e: any) => {
     e.stopPropagation();
-    addToCart(product);
-    Alert.alert(
-      "Added to Cart! 🛒", 
-      `${product.name} has been added to your cart.\nPrice: ₱${product.price}`,
-      [
-        { text: "Continue Shopping", style: "cancel" },
-        { text: "View Cart", onPress: () => {} }
-      ]
-    );
+    try {
+      await addToCart(product);
+      Alert.alert(
+        "Added to Cart!", 
+        `${product.name} has been added to your cart.\nPrice: ₱${product.price}`,
+        [
+          { text: "Continue Shopping", style: "cancel" },
+          { text: "View Cart", onPress: () => {} }
+        ]
+      );
+    } catch (error) {
+      console.error('Error adding to cart:', error);
+    }
   };
 
-  const handleRemoveFromFavorites = (e: any) => {
+  const handleRemoveFromFavorites = async (e: any) => {
     e.stopPropagation();
     Alert.alert(
       "Remove from Favorites?",
@@ -159,9 +167,13 @@ const FavoriteProductCard: React.FC<{
         { 
           text: "Remove", 
           style: "destructive",
-          onPress: () => {
-            removeFromFavorites(product.id);
-            Alert.alert("Removed!", `${product.name} removed from favorites.`);
+          onPress: async () => {
+            try {
+              await removeFromFavorites(product.id);
+              Alert.alert("Removed!", `${product.name} removed from favorites.`);
+            } catch (error) {
+              console.error('Error removing from favorites:', error);
+            }
           }
         }
       ]
@@ -228,7 +240,7 @@ const FavoriteProductCard: React.FC<{
 };
 
 const FavoritesContent: React.FC = () => {
-  const { favoriteItems } = useContext(AppContext);
+  const { favoriteItems, clearFavorites } = useContext(AppContext);
   const router = useRouter();
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [showProductModal, setShowProductModal] = useState(false);
@@ -238,7 +250,7 @@ const FavoritesContent: React.FC = () => {
     setShowProductModal(true);
   };
 
-  const handleClearAllFavorites = () => {
+  const handleClearAllFavorites = async () => {
     if (favoriteItems.length === 0) return;
     
     Alert.alert(
@@ -249,12 +261,13 @@ const FavoritesContent: React.FC = () => {
         { 
           text: "Clear All", 
           style: "destructive",
-          onPress: () => {
-            favoriteItems.forEach(item => {
-              const { removeFromFavorites } = useContext(AppContext);
-              removeFromFavorites(item.id);
-            });
-            Alert.alert("Cleared!", "All favorites have been removed.");
+          onPress: async () => {
+            try {
+              await clearFavorites();
+              Alert.alert("Cleared!", "All favorites have been removed.");
+            } catch (error) {
+              console.error('Error clearing favorites:', error);
+            }
           }
         }
       ]
@@ -288,7 +301,7 @@ const FavoritesContent: React.FC = () => {
           </Text>
           <TouchableOpacity 
             style={styles.shopButton}
-            onPress={() => router.push('/products')}
+            onPress={() => router.push('/(tabs)/products')}
           >
             <Ionicons name="flower-outline" size={20} color="#fff" />
             <Text style={styles.shopButtonText}>Browse Products</Text>
@@ -549,7 +562,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 4,
   },
-  // Modal Styles (matching products.tsx)
+  // Modal Styles
   modalContainer: {
     flex: 1,
     backgroundColor: '#f8f9fa',

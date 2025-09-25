@@ -13,9 +13,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { AppContext, allProducts } from './index'; // Import from index.tsx
+import { AppContext } from '../AppContext';
+import { allProducts } from './index';
 
-// TypeScript interfaces (matching index.tsx)
+// TypeScript interfaces
 interface Category {
   id: number;
   name: string;
@@ -38,9 +39,9 @@ interface Product {
   category: string;
 }
 
-// Extended products dataset (combining home products with additional ones)
+// Extended products dataset
 const extendedProducts: Product[] = [
-  ...allProducts, // Import from index.tsx
+  ...allProducts,
   {
     id: 9,
     name: 'Lavender Dreams',
@@ -163,7 +164,7 @@ const extendedProducts: Product[] = [
   }
 ];
 
-// Categories (matching index.tsx exactly)
+// Categories
 const categories: Category[] = [
   { id: 1, name: 'roses', label: 'Roses', icon: 'rose', color: '#ff6b6b', count: '6 items' },
   { id: 2, name: 'bouquets', label: 'Bouquets', icon: 'flower', color: '#4ecdc4', count: '4 items' },
@@ -171,29 +172,29 @@ const categories: Category[] = [
   { id: 4, name: 'birthday', label: 'Birthday', icon: 'gift', color: '#f9ca24', count: '2 items' }
 ];
 
-// Cart Modal Component (copied from index.tsx)
+// Cart Modal Component
 const CartModal: React.FC<{
   visible: boolean;
   onClose: () => void;
 }> = ({ visible, onClose }) => {
   const { cartItems, updateQuantity, removeFromCart, getTotalPrice, clearCart } = useContext(AppContext);
 
-  const handleQuantityChange = (productId: number, change: number) => {
-    const item = cartItems.find(item => item.id === productId);
+  const handleQuantityChange = async (productId: number, change: number) => {
+    const item = cartItems.find(item => item.productId === productId);
     if (item) {
-      updateQuantity(productId, item.quantity + change);
+      await updateQuantity(productId, item.quantity + change);
     }
   };
 
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
     Alert.alert(
       "Checkout",
       "Thank you for your order! Your flowers will be delivered soon.",
       [
         {
           text: "OK",
-          onPress: () => {
-            clearCart();
+          onPress: async () => {
+            await clearCart();
             onClose();
           }
         }
@@ -238,14 +239,14 @@ const CartModal: React.FC<{
                     <View style={styles.cartQuantityControls}>
                       <TouchableOpacity
                         style={styles.cartQuantityButton}
-                        onPress={() => handleQuantityChange(item.id, -1)}
+                        onPress={() => handleQuantityChange(item.productId, -1)}
                       >
                         <Ionicons name="remove" size={16} color="#7b4bb7" />
                       </TouchableOpacity>
                       <Text style={styles.cartQuantityText}>{item.quantity}</Text>
                       <TouchableOpacity
                         style={styles.cartQuantityButton}
-                        onPress={() => handleQuantityChange(item.id, 1)}
+                        onPress={() => handleQuantityChange(item.productId, 1)}
                       >
                         <Ionicons name="add" size={16} color="#7b4bb7" />
                       </TouchableOpacity>
@@ -254,7 +255,7 @@ const CartModal: React.FC<{
                   <View style={styles.cartItemRight}>
                     <TouchableOpacity
                       style={styles.removeButton}
-                      onPress={() => removeFromCart(item.id)}
+                      onPress={() => removeFromCart(item.productId)}
                     >
                       <Ionicons name="trash-outline" size={20} color="#ff6b6b" />
                     </TouchableOpacity>
@@ -300,34 +301,42 @@ const ProductCard: React.FC<{
   const { addToCart, addToFavorites, removeFromFavorites, isFavorite } = useContext(AppContext);
   const router = useRouter();
 
-  const handleAddToCart = (e: any) => {
+  const handleAddToCart = async (e: any) => {
     e.stopPropagation();
-    addToCart(product);
-    Alert.alert(
-      "Added to Cart! 🛒",
-      `${product.name} has been added to your cart.\nPrice: ₱${product.price}`,
-      [
-        { text: "Continue Shopping", style: "cancel" },
-        { text: "View Cart", onPress: () => {} }
-      ]
-    );
-  };
-
-  const handleFavoriteToggle = (e: any) => {
-    e.stopPropagation();
-    if (isFavorite(product.id)) {
-      removeFromFavorites(product.id);
-      Alert.alert("Removed from Favorites", `${product.name} removed from your favorites.`);
-    } else {
-      addToFavorites(product);
+    try {
+      await addToCart(product);
       Alert.alert(
-        "Added to Favorites! ❤️", 
-        `${product.name} added to your favorites.`,
+        "Added to Cart!",
+        `${product.name} has been added to your cart.\nPrice: ₱${product.price}`,
         [
           { text: "Continue Shopping", style: "cancel" },
-          { text: "View Favorites", onPress: () => router.push('/favorites') }
+          { text: "View Cart", onPress: () => {} }
         ]
       );
+    } catch (error) {
+      console.error('Error adding to cart:', error);
+    }
+  };
+
+  const handleFavoriteToggle = async (e: any) => {
+    e.stopPropagation();
+    try {
+      if (isFavorite(product.id)) {
+        await removeFromFavorites(product.id);
+        Alert.alert("Removed from Favorites", `${product.name} removed from your favorites.`);
+      } else {
+        await addToFavorites(product);
+        Alert.alert(
+          "Added to Favorites!", 
+          `${product.name} added to your favorites.`,
+          [
+            { text: "Continue Shopping", style: "cancel" },
+            { text: "View Favorites", onPress: () => router.push('/(tabs)/favorites') }
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('Error toggling favorite:', error);
     }
   };
 
@@ -417,15 +426,19 @@ const ProductDetailModal: React.FC<{
 
   if (!product) return null;
 
-  const handleAddToCart = () => {
-    for (let i = 0; i < quantity; i++) {
-      addToCart(product);
+  const handleAddToCart = async () => {
+    try {
+      for (let i = 0; i < quantity; i++) {
+        await addToCart(product);
+      }
+      Alert.alert(
+        "Added to Cart!",
+        `${quantity}x ${product.name} added to your cart.`,
+        [{ text: "OK", onPress: onClose }]
+      );
+    } catch (error) {
+      console.error('Error adding to cart:', error);
     }
-    Alert.alert(
-      "Added to Cart!",
-      `${quantity}x ${product.name} added to your cart.`,
-      [{ text: "OK", onPress: onClose }]
-    );
   };
 
   const renderStars = (rating: number) => {

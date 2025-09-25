@@ -1,5 +1,5 @@
-// index.tsx - Fixed version with perfect category navigation
-import React, { useState, useEffect, createContext, useContext } from "react";
+// app/(tabs)/index.tsx - Updated for authentication integration
+import React, { useState, useEffect, useContext } from "react";
 import {
   View,
   Text,
@@ -12,9 +12,12 @@ import {
   Dimensions,
   TextInput,
   Modal,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from 'expo-router';
+import { AppContext } from '../AppContext';
+import { useAuth } from '../AuthContext';
 
 const { width } = Dimensions.get('window');
 
@@ -40,118 +43,6 @@ interface Product {
   description: string;
   category: string;
 }
-
-interface CartItem extends Product {
-  quantity: number;
-}
-
-// Global App Context
-export const AppContext = createContext<{
-  cartItems: CartItem[];
-  favoriteItems: Product[];
-  addToCart: (product: Product) => void;
-  removeFromCart: (productId: number) => void;
-  updateQuantity: (productId: number, quantity: number) => void;
-  clearCart: () => void;
-  addToFavorites: (product: Product) => void;
-  removeFromFavorites: (productId: number) => void;
-  isFavorite: (productId: number) => boolean;
-  getTotalItems: () => number;
-  getTotalPrice: () => number;
-}>({
-  cartItems: [],
-  favoriteItems: [],
-  addToCart: () => {},
-  removeFromCart: () => {},
-  updateQuantity: () => {},
-  clearCart: () => {},
-  addToFavorites: () => {},
-  removeFromFavorites: () => {},
-  isFavorite: () => false,
-  getTotalItems: () => 0,
-  getTotalPrice: () => 0,
-});
-
-// App Provider Component
-export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [favoriteItems, setFavoriteItems] = useState<Product[]>([]);
-
-  const addToCart = (product: Product) => {
-    setCartItems(prevItems => {
-      const existingItem = prevItems.find(item => item.id === product.id);
-      if (existingItem) {
-        return prevItems.map(item =>
-          item.id === product.id
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
-        );
-      }
-      return [...prevItems, { ...product, quantity: 1 }];
-    });
-  };
-
-  const removeFromCart = (productId: number) => {
-    setCartItems(prevItems => prevItems.filter(item => item.id !== productId));
-  };
-
-  const updateQuantity = (productId: number, quantity: number) => {
-    if (quantity <= 0) {
-      removeFromCart(productId);
-      return;
-    }
-    setCartItems(prevItems =>
-      prevItems.map(item =>
-        item.id === productId ? { ...item, quantity } : item
-      )
-    );
-  };
-
-  const clearCart = () => {
-    setCartItems([]);
-  };
-
-  const addToFavorites = (product: Product) => {
-    setFavoriteItems(prev => {
-      if (prev.find(item => item.id === product.id)) return prev;
-      return [...prev, product];
-    });
-  };
-
-  const removeFromFavorites = (productId: number) => {
-    setFavoriteItems(prev => prev.filter(item => item.id !== productId));
-  };
-
-  const isFavorite = (productId: number) => {
-    return favoriteItems.some(item => item.id === productId);
-  };
-
-  const getTotalItems = () => {
-    return cartItems.reduce((total, item) => total + item.quantity, 0);
-  };
-
-  const getTotalPrice = () => {
-    return cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
-  };
-
-  return (
-    <AppContext.Provider value={{
-      cartItems,
-      favoriteItems,
-      addToCart,
-      removeFromCart,
-      updateQuantity,
-      clearCart,
-      addToFavorites,
-      removeFromFavorites,
-      isFavorite,
-      getTotalItems,
-      getTotalPrice,
-    }}>
-      {children}
-    </AppContext.Provider>
-  );
-};
 
 // Sample Data
 const heroSlides = [
@@ -260,6 +151,14 @@ export const allProducts: Product[] = [
   }
 ];
 
+// Loading Component
+const LoadingScreen: React.FC = () => (
+  <View style={styles.loadingContainer}>
+    <ActivityIndicator size="large" color="#7b4bb7" />
+    <Text style={styles.loadingText}>Loading...</Text>
+  </View>
+);
+
 // Product Card Component
 const ProductCard: React.FC<{ 
   product: Product; 
@@ -268,34 +167,42 @@ const ProductCard: React.FC<{
   const { addToCart, addToFavorites, removeFromFavorites, isFavorite } = useContext(AppContext);
   const router = useRouter();
 
-  const handleAddToCart = (e: any) => {
+  const handleAddToCart = async (e: any) => {
     e.stopPropagation();
-    addToCart(product);
-    Alert.alert(
-      "Added to Cart!",
-      `${product.name} has been added to your cart.\nPrice: ₱${product.price}`,
-      [
-        { text: "Continue Shopping", style: "cancel" },
-        { text: "View Cart", onPress: () => {} }
-      ]
-    );
-  };
-
-  const handleFavoriteToggle = (e: any) => {
-    e.stopPropagation();
-    if (isFavorite(product.id)) {
-      removeFromFavorites(product.id);
-      Alert.alert("Removed from Favorites", `${product.name} removed from your favorites.`);
-    } else {
-      addToFavorites(product);
+    try {
+      await addToCart(product);
       Alert.alert(
-        "Added to Favorites!", 
-        `${product.name} added to your favorites.`,
+        "Added to Cart!",
+        `${product.name} has been added to your cart.\nPrice: ₱${product.price}`,
         [
           { text: "Continue Shopping", style: "cancel" },
-          { text: "View Favorites", onPress: () => router.push('/favorites') }
+          { text: "View Cart", onPress: () => {} }
         ]
       );
+    } catch (error) {
+      console.error('Error adding to cart:', error);
+    }
+  };
+
+  const handleFavoriteToggle = async (e: any) => {
+    e.stopPropagation();
+    try {
+      if (isFavorite(product.id)) {
+        await removeFromFavorites(product.id);
+        Alert.alert("Removed from Favorites", `${product.name} removed from your favorites.`);
+      } else {
+        await addToFavorites(product);
+        Alert.alert(
+          "Added to Favorites!", 
+          `${product.name} added to your favorites.`,
+          [
+            { text: "Continue Shopping", style: "cancel" },
+            { text: "View Favorites", onPress: () => router.push('/(tabs)/favorites') }
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('Error toggling favorite:', error);
     }
   };
 
@@ -373,15 +280,19 @@ const ProductDetailModal: React.FC<{
 
   if (!product) return null;
 
-  const handleAddToCart = () => {
-    for (let i = 0; i < quantity; i++) {
-      addToCart(product);
+  const handleAddToCart = async () => {
+    try {
+      for (let i = 0; i < quantity; i++) {
+        await addToCart(product);
+      }
+      Alert.alert(
+        "Added to Cart!",
+        `${quantity}x ${product.name} added to your cart.`,
+        [{ text: "OK", onPress: onClose }]
+      );
+    } catch (error) {
+      console.error('Error adding to cart:', error);
     }
-    Alert.alert(
-      "Added to Cart!",
-      `${quantity}x ${product.name} added to your cart.`,
-      [{ text: "OK", onPress: onClose }]
-    );
   };
 
   const renderStars = (rating: number) => {
@@ -470,22 +381,22 @@ const CartModal: React.FC<{
 }> = ({ visible, onClose }) => {
   const { cartItems, updateQuantity, removeFromCart, getTotalPrice, clearCart } = useContext(AppContext);
 
-  const handleQuantityChange = (productId: number, change: number) => {
-    const item = cartItems.find(item => item.id === productId);
+  const handleQuantityChange = async (productId: number, change: number) => {
+    const item = cartItems.find(item => item.productId === productId);
     if (item) {
-      updateQuantity(productId, item.quantity + change);
+      await updateQuantity(productId, item.quantity + change);
     }
   };
 
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
     Alert.alert(
       "Checkout",
       "Thank you for your order! Your flowers will be delivered soon.",
       [
         {
           text: "OK",
-          onPress: () => {
-            clearCart();
+          onPress: async () => {
+            await clearCart();
             onClose();
           }
         }
@@ -530,14 +441,14 @@ const CartModal: React.FC<{
                     <View style={styles.cartQuantityControls}>
                       <TouchableOpacity
                         style={styles.cartQuantityButton}
-                        onPress={() => handleQuantityChange(item.id, -1)}
+                        onPress={() => handleQuantityChange(item.productId, -1)}
                       >
                         <Ionicons name="remove" size={16} color="#7b4bb7" />
                       </TouchableOpacity>
                       <Text style={styles.cartQuantityText}>{item.quantity}</Text>
                       <TouchableOpacity
                         style={styles.cartQuantityButton}
-                        onPress={() => handleQuantityChange(item.id, 1)}
+                        onPress={() => handleQuantityChange(item.productId, 1)}
                       >
                         <Ionicons name="add" size={16} color="#7b4bb7" />
                       </TouchableOpacity>
@@ -546,7 +457,7 @@ const CartModal: React.FC<{
                   <View style={styles.cartItemRight}>
                     <TouchableOpacity
                       style={styles.removeButton}
-                      onPress={() => removeFromCart(item.id)}
+                      onPress={() => removeFromCart(item.productId)}
                     >
                       <Ionicons name="trash-outline" size={20} color="#ff6b6b" />
                     </TouchableOpacity>
@@ -591,13 +502,15 @@ const HomeScreen: React.FC = () => {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [showProductModal, setShowProductModal] = useState(false);
   const [showCartModal, setShowCartModal] = useState(false);
-  const { getTotalItems } = useContext(AppContext);
+  const { getTotalItems, isLoading } = useContext(AppContext);
+  const { user } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % heroSlides.length);
     }, 4000);
+
     return () => clearInterval(timer);
   }, []);
 
@@ -606,11 +519,14 @@ const HomeScreen: React.FC = () => {
     setShowProductModal(true);
   };
 
-  // FIXED: Category navigation function
   const handleCategoryPress = (category: Category) => {
     console.log(`Navigating to products with category: ${category.name}`);
-    router.push(`/products?category=${category.name}`);
+    router.push(`/(tabs)/products?category=${category.name}`);
   };
+
+  if (isLoading) {
+    return <LoadingScreen />;
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -619,7 +535,10 @@ const HomeScreen: React.FC = () => {
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.greeting}>Good morning!</Text>
+            <Text style={styles.greeting}>
+              Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening'}
+              {user ? `, ${user.fullName.split(' ')[0]}` : ''}!
+            </Text>
             <Text style={styles.headerTitle}>Find your perfect flowers</Text>
           </View>
           <TouchableOpacity style={styles.cartButton} onPress={() => setShowCartModal(true)}>
@@ -670,7 +589,7 @@ const HomeScreen: React.FC = () => {
                     <Text style={styles.heroSubtitle}>{slide.subtitle}</Text>
                     <TouchableOpacity 
                       style={styles.shopNowButton}
-                      onPress={() => router.push('/products')}
+                      onPress={() => router.push('/(tabs)/products')}
                     >
                       <Text style={styles.shopNowText}>Shop Now</Text>
                       <Ionicons name="arrow-forward" size={16} color="#fff" />
@@ -694,11 +613,11 @@ const HomeScreen: React.FC = () => {
           </View>
         </View>
 
-        {/* Categories - FIXED: Proper category navigation */}
+        {/* Categories */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Shop by Category</Text>
-            <TouchableOpacity onPress={() => router.push('/products')}>
+            <TouchableOpacity onPress={() => router.push('/(tabs)/products')}>
               <Text style={styles.seeAllText}>See All</Text>
             </TouchableOpacity>
           </View>
@@ -725,7 +644,7 @@ const HomeScreen: React.FC = () => {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Featured Products</Text>
-            <TouchableOpacity onPress={() => router.push('/products')}>
+            <TouchableOpacity onPress={() => router.push('/(tabs)/products')}>
               <Text style={styles.seeAllText}>View All</Text>
             </TouchableOpacity>
           </View>
@@ -762,16 +681,20 @@ const HomeScreen: React.FC = () => {
   );
 };
 
-// Main App Component 
-export default function App() {
-  return (
-    <AppProvider>
-      <HomeScreen />
-    </AppProvider>
-  );
-}
+export default HomeScreen;
 
 const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
+  },
   safeArea: {
     flex: 1,
     backgroundColor: "#f8f9fa",
@@ -1201,7 +1124,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
-  // Cart Modal Styles
   cartList: {
     flex: 1,
     paddingHorizontal: 20,
